@@ -5,12 +5,6 @@ name: Variable Practise
 
 # Controls when the workflow will run
 on:
-  # Triggers on push or pull request events for the main branch
-  push:
-    branches: ["main"]
-  pull_request:
-    branches: ["main"]
-
   # Allows manual execution from the Actions tab
   workflow_dispatch:
 
