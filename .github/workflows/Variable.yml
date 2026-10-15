@@ -13,11 +13,10 @@ jobs:
     # Runner configuration
     runs-on: ubuntu-latest
 
-    # Environment variables available to all steps in this job
     env:
       mascot: Mona
       super_duper_var: totally_awesome
-
+    
     steps:
       # Checks out the repository
       - name: Checkout repository
@@ -26,7 +25,8 @@ jobs:
       # Prints the mascot variable
       - name: Print mascot
         run: echo "Hi ${{ env.mascot }}"
-
+         # Environment variables available to all steps in this job
+       
       # Prints the second variable
       - name: Print super duper variable
         run: echo "Hi ${{ env.super_duper_var }}"
