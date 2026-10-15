@@ -36,3 +36,13 @@ jobs:
       # Prints the second variable
       - name: Print super duper variable
         run: echo "Hi ${{ env.super_duper_var }}"
+        
+      - name: Print super duper variable
+        run: echo "Hi ${{ vars.VARIABLEPRACTISE }}"
+      
+      - name: Print super duper variable
+        run: echo "Hi ${{ vars.SECRETKEY }}"
+      
+        
+        
+      
