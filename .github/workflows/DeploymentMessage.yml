@@ -1,3 +1,5 @@
+name: DeploymentMessage
+
 on:
   push:
     branches:
