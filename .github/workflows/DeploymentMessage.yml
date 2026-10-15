@@ -121,6 +121,8 @@ jobs:
           else
             echo "No deleted components."
           fi
-
+      
       - name: Cleanup private key
         if: always()
+        run: rm -f "$RUNNER_TEMP/server.key"
+
