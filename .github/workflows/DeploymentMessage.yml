@@ -1,0 +1,124 @@
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: salesforce-sandbox
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout committed code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Salesforce CLI
+        run: npm install --global @salesforce/cli
+
+      - name: Install SFDX-Git-Delta
+        run: |
+          echo y | sf plugins install sfdx-git-delta
+
+      - name: Authenticate Sandbox
+        env:
+          SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
+          SF_USERNAME: ${{ secrets.SF_USERNAME }}
+          SF_JWT_KEY: ${{ secrets.SF_JWT_KEY }}
+        run: |
+          printf '%s' "$SF_JWT_KEY" > "$RUNNER_TEMP/server.key"
+          chmod 600 "$RUNNER_TEMP/server.key"
+
+          sf org login jwt \
+            --client-id "$SF_CLIENT_ID" \
+            --jwt-key-file "$RUNNER_TEMP/server.key" \
+            --username "$SF_USERNAME" \
+            --instance-url https://test.salesforce.com \
+            --alias Sandbox
+
+      - name: Find last successful deployment
+        id: baseline
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BASE=$(gh api \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-sandbox.yml/runs?branch=main&status=completed&per_page=100" \
+            --jq '[.workflow_runs[]
+              | select(.conclusion == "success")
+              | select(.id != ('"$GITHUB_RUN_ID"'))]
+              | sort_by(.run_number)
+              | last
+              | .head_sha // empty')
+
+          echo "sha=$BASE" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy all source on first run
+        if: steps.baseline.outputs.sha == ''
+        run: |
+          sf project deploy start \
+            --source-dir force-app \
+            --target-org Sandbox \
+            --test-level RunLocalTests \
+            --wait 60
+
+      - name: Generate committed changes delta
+        if: steps.baseline.outputs.sha != ''
+        env:
+          BASE_SHA: ${{ steps.baseline.outputs.sha }}
+        run: |
+          mkdir -p delta
+          sf sgd source delta \
+            --from "$BASE_SHA" \
+            --to HEAD \
+            --output-dir delta \
+            --source-dir force-app
+
+          echo "Generated package.xml:"
+          cat delta/package/package.xml
+
+      - name: Deploy added and modified components
+        if: steps.baseline.outputs.sha != ''
+        run: |
+          if grep -q '<types>' delta/package/package.xml; then
+            sf project deploy start \
+              --manifest delta/package/package.xml \
+              --target-org Sandbox \
+              --test-level RunLocalTests \
+              --wait 60
+          else
+            echo "No added or modified components."
+          fi
+
+      - name: Deploy deleted components
+        if: steps.baseline.outputs.sha != ''
+        run: |
+          FILE="delta/destructiveChanges/destructiveChanges.xml"
+          MANIFEST="delta/destructiveChanges/package.xml"
+
+          if [ -f "$FILE" ] && grep -q '<types>' "$FILE"; then
+            sf project deploy start \
+              --manifest "$MANIFEST" \
+              --pre-destructive-changes "$FILE" \
+              --target-org Sandbox \
+              --ignore-warnings \
+              --wait 60
+          else
+            echo "No deleted components."
+          fi
+
+      - name: Cleanup private key
+        if: always()
