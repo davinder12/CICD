@@ -46,5 +46,6 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_MODEL: openai/gpt-oss-120b
           GH_TOKEN: ${{ github.token }}
+          APPLY_CHANGES: "true"
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: python jira_agent/agent.py
