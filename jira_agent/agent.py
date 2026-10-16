@@ -6,7 +6,7 @@ from pathlib import Path
 
 import requests
 from requests.auth import HTTPBasicAuth
-from openai import OpenAI
+from groq import Groq
 
 
 def require_secret(name: str) -> str:
@@ -41,7 +41,6 @@ def adf_to_text(value) -> str:
 
         for child in value.get("content", []):
             text = adf_to_text(child)
-
             if text:
                 parts.append(text)
 
@@ -120,10 +119,7 @@ def get_salesforce_context(
         if path.is_file()
         and path.suffix.lower() in allowed_suffixes
         and ".git" not in path.parts
-    )
-
-    # Keep the inventory and AI request bounded.
-    paths = paths[:150]
+    )[:150]
 
     inventory = [
         str(path.relative_to(repo_root))
@@ -179,19 +175,19 @@ def create_plan(
     inventory: str,
     context: str,
 ) -> str:
-    """Ask Gemini to propose a plan without editing files."""
+    """Ask Groq to propose an implementation plan without editing files."""
 
-    client = OpenAI(
-        api_key=require_secret("GEMINI_API_KEY"),
-        base_url=(
-            "https://generativelanguage.googleapis.com/v1beta/openai/"
-        ),
+    client = Groq(
+        api_key=require_secret("GROQ_API_KEY")
     )
 
     model = os.getenv(
-        "GEMINI_MODEL",
-        "gemini-2.5-flash",
+        "GROQ_MODEL",
+        "llama-3.3-70b-versatile",
     ).strip()
+
+    if not model:
+        raise RuntimeError("GROQ_MODEL cannot be empty")
 
     prompt = f"""
 You are a Salesforce metadata implementation planner.
@@ -231,16 +227,30 @@ PROJECT CONTEXT
 Return a concise, actionable implementation plan.
 """
 
-    response = client.responses.create(
+    response = client.chat.completions.create(
         model=model,
-        input=prompt,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a Salesforce implementation "
+                    "planning assistant. Follow the safety "
+                    "rules provided in the user request."
+                ),
+            },
+            {
+                "role": "user",
+                "content": prompt,
+            },
+        ],
+        temperature=0.2,
     )
 
-    plan = response.output_text
+    plan = response.choices[0].message.content or ""
 
-    if not plan or not plan.strip():
+    if not plan.strip():
         raise RuntimeError(
-            "Gemini returned an empty implementation plan."
+            "Groq returned an empty implementation plan."
         )
 
     return plan.strip()
@@ -253,18 +263,13 @@ def main():
     ).strip()
 
     if not issue_key:
-        raise RuntimeError(
-            "JIRA_ISSUE_KEY is required"
-        )
+        raise RuntimeError("JIRA_ISSUE_KEY is required")
 
-    # Validate issue key before making an API request.
     if not re.fullmatch(
         r"[A-Za-z][A-Za-z0-9_]*-\d+",
         issue_key,
     ):
-        raise RuntimeError(
-            "Invalid Jira issue key format"
-        )
+        raise RuntimeError("Invalid Jira issue key format")
 
     jira_base_url = require_secret(
         "JIRA_BASE_URL"
@@ -273,6 +278,9 @@ def main():
     jira_email = require_secret("JIRA_EMAIL")
     jira_api_token = require_secret("JIRA_API_TOKEN")
     repository = require_secret("GITHUB_REPOSITORY")
+
+    # Validate the Groq key before fetching the Jira issue.
+    require_secret("GROQ_API_KEY")
 
     print(f"Fetching Jira issue: {issue_key}")
 
@@ -302,20 +310,14 @@ def main():
 
     repo_root = Path.cwd()
 
-    inventory, context = get_salesforce_context(
-        repo_root
-    )
+    inventory, context = get_salesforce_context(repo_root)
 
     print("\nSalesforce metadata inventory:")
     print(inventory or "(No matching files found)")
 
-    print("\nGenerating AI implementation plan using Gemini...")
+    print("\nGenerating AI implementation plan using Groq...")
 
-    plan = create_plan(
-        issue,
-        inventory,
-        context,
-    )
+    plan = create_plan(issue, inventory, context)
 
     print("\n========== AI IMPLEMENTATION PLAN ==========\n")
     print(plan)
@@ -327,8 +329,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as exc:
-        print(
-            f"Agent failed: {exc}",
-            file=sys.stderr,
-        )
+        print(f"Agent failed: {exc}", file=sys.stderr)
         sys.exit(1)
