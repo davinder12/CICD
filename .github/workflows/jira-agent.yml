@@ -1,4 +1,3 @@
-
 name: Jira AI Agent
 
 on:
@@ -18,25 +17,56 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout repository
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+          persist-credentials: true
 
+      # 2. Validate Jira issue key
+      - name: Validate issue key
+        env:
+          JIRA_ISSUE_KEY: ${{ inputs.issue_key }}
+        run: |
+          if [[ ! "$JIRA_ISSUE_KEY" =~ ^[A-Za-z][A-Za-z0-9_]*-[0-9]+$ ]]; then
+            echo "::error::Invalid Jira issue key"
+            exit 1
+          fi
+
+      # 3. Setup Python
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
+      # 4. Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install groq requests
 
-      - name: Verify Groq installation
-        run: python -c "from groq import Groq; import requests; print('Dependencies installed successfully')"
+      - name: Verify dependencies
+        run: |
+          python -c "from groq import Groq; import requests; print('Dependencies installed successfully')"
 
+      # 5. Create or reuse issue branch BEFORE running agent
+      - name: Prepare issue branch
+        env:
+          JIRA_ISSUE_KEY: ${{ inputs.issue_key }}
+        run: |
+          BRANCH="ai/jira-${JIRA_ISSUE_KEY}"
+          echo "Working on branch: $BRANCH"
+
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            git fetch origin "$BRANCH"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -b "$BRANCH" main
+          fi
+
+      # 6. Run Jira AI agent and apply validated changes
       - name: Run Jira AI agent
         env:
           JIRA_ISSUE_KEY: ${{ inputs.issue_key }}
@@ -45,7 +75,63 @@ jobs:
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_MODEL: openai/gpt-oss-120b
-          GH_TOKEN: ${{ github.token }}
-          APPLY_CHANGES: "true"
           GITHUB_REPOSITORY: ${{ github.repository }}
+          APPLY_CHANGES: "true"
         run: python jira_agent/agent.py
+
+      # 7. Commit and push Salesforce changes
+      - name: Commit and push changes
+        env:
+          JIRA_ISSUE_KEY: ${{ inputs.issue_key }}
+        run: |
+          BRANCH="ai/jira-${JIRA_ISSUE_KEY}"
+
+          git add force-app/
+
+          if git diff --cached --quiet; then
+            echo "::notice::No Salesforce changes to commit."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+            git commit -m "AI: implement ${JIRA_ISSUE_KEY}"
+            git push origin "$BRANCH"
+          fi
+
+      # 8. Create a PR or reuse the existing one
+      - name: Create or update Pull Request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          JIRA_ISSUE_KEY: ${{ inputs.issue_key }}
+        run: |
+          BRANCH="ai/jira-${JIRA_ISSUE_KEY}"
+          BASE="main"
+
+          if ! git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+            echo "::notice::No remote issue branch exists; skipping PR."
+            exit 0
+          fi
+
+          EXISTING_PR=$(gh pr list \
+            --repo "$GH_REPO" \
+            --base "$BASE" \
+            --head "$BRANCH" \
+            --state open \
+            --json url \
+            --jq '.[0].url // empty')
+
+          if [[ -n "$EXISTING_PR" ]]; then
+            echo "Pull Request already exists: $EXISTING_PR"
+          else
+            gh pr create \
+              --repo "$GH_REPO" \
+              --base "$BASE" \
+              --head "$BRANCH" \
+              --title "AI changes for ${JIRA_ISSUE_KEY}" \
+              --body "Automated Salesforce changes generated from Jira ${JIRA_ISSUE_KEY}.
+
+          Please review the proposed metadata changes and validate them in a sandbox before merging.
+
+          This workflow does not deploy Salesforce metadata."
+          fi
