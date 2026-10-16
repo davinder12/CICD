@@ -58,7 +58,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           BASE=$(gh api \
-            "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-sandbox.yml/runs?branch=main&status=completed&per_page=100" \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/DeploymentMessage.yml/runs?branch=main&status=completed&per_page=100" \
             --jq '[.workflow_runs[]
               | select(.conclusion == "success")
               | select(.id != ('"$GITHUB_RUN_ID"'))]
