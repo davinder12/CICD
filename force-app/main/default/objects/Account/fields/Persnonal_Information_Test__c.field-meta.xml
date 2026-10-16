@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CustomField xmlns="http://soap.sforce.com/2006/04/metadata">
+    <fullName>Persnonal_Information_Test__c</fullName>
+    <label>Personal Information Test</label>
+    <length>200</length>
+    <type>Text</type>
+</CustomField>
