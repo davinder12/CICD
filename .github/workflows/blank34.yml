@@ -1,0 +1,38 @@
+name: Salesforce JWT Authentication
+
+on:
+  workflow_dispatch:
+
+jobs:
+  salesforce-auth:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Setup Salesforce CLI
+        uses: salesforcecli/setup-sf@v1
+        with:
+          version: latest
+
+      - name: Authenticate to Salesforce Sandbox
+        env:
+          SF_CLIENT_ID: ${{ secrets.SF_CLIENT_ID }}
+          SF_USERNAME: ${{ secrets.SF_USERNAME }}
+          SF_JWT_KEY: ${{ secrets.SF_JWT_KEY }}
+        run: |
+          set -e
+
+          KEY_FILE="$RUNNER_TEMP/server.key"
+
+          printf '%s\n' "$SF_JWT_KEY" > "$KEY_FILE"
+          chmod 600 "$KEY_FILE"
+
+          openssl pkey -in "$KEY_FILE" -check -noout
+
+          sf org login jwt \
+            --client-id "$SF_CLIENT_ID" \
+            --jwt-key-file "$KEY_FILE" \
+            --username "$SF_USERNAME" \
+            --instance-url "https://test.salesforce.com" \
+            --alias Sandbox
+
+          sf org display --target-org Sandbox
