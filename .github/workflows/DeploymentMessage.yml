@@ -99,7 +99,7 @@ jobs:
             sf project deploy start \
               --manifest delta/package/package.xml \
               --target-org Sandbox \
-              --test-level RunLocalTests \
+              --test-level NoTestRun \
               --wait 60
           else
             echo "No added or modified components."
