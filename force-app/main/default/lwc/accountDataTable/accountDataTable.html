@@ -1,0 +1,26 @@
+<template>
+    <lightning-card title="Accounts" icon-name="standard:account">
+        <template if:true={isLoading}>
+            <lightning-spinner alternative-text="Loading" size="medium"></lightning-spinner>
+        </template>
+        <template if:true={hasError}>
+            <div class="slds-text-color_error slds-p-around_medium">{errorMessage}</div>
+        </template>
+        <template if:true={hasNoData}>
+            <div class="slds-p-around_medium">No Account records found.</div>
+        </template>
+        <template if:true={accounts}>
+            <lightning-datatable
+                key-field="Id"
+                data={accounts}
+                columns={columns}
+                hide-checkbox-column="true">
+            </lightning-datatable>
+            <div class="slds-m-top_small slds-grid slds-grid_align-spread slds-p-horizontal_small">
+                <lightning-button label="Previous" onclick={handlePrev} disabled={isFirstPage}></lightning-button>
+                <div>Page {currentPage} of {totalPages}</div>
+                <lightning-button label="Next" onclick={handleNext} disabled={isLastPage}></lightning-button>
+            </div>
+        </template>
+    </lightning-card>
+</template>
