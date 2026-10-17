@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<FlowDefinition xmlns="http://soap.sforce.com/2006/04/metadata">
+    <activeVersionNumber>1</activeVersionNumber>
+    <description>Record‑Triggered Flow that sets a default Website URL on Account records when the field is empty.</description>
+    <label>Set Account Website When Blank</label>
+    <processType>RecordTriggeredFlow</processType>
+    <fullName>Set_Account_Website_When_Blank</fullName>
+</FlowDefinition>

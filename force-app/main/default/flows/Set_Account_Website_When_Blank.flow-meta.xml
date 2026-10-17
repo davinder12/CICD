@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>67.0</apiVersion>
+    <description>Sets Account.Website to a default URL when the field is blank.</description>
+    <label>Set Account Website When Blank</label>
+    <processType>RecordTriggered</processType>
+    <triggerType>AfterSave</triggerType>
+    <object>Account</object>
+    <recordTriggerType>CreatedOrEdited</recordTriggerType>
+    <conditionLogic>AND</conditionLogic>
+    <conditions>
+        <field>Website</field>
+        <operator>IsNull</operator>
+        <value></value>
+    </conditions>
+    <actionCalls>
+        <actionCall>
+            <name>Update_Account</name>
+            <type>UpdateRecords</type>
+            <label>Update Account</label>
+            <description>Populate Website with default URL when blank.</description>
+            <inputAssignments>
+                <assignments>
+                    <field>Website</field>
+                    <value>https://www.speedtest.net/</value>
+                </assignments>
+            </inputAssignments>
+            <filterLogic>AND</filterLogic>
+            <filters>
+                <field>Id</field>
+                <operator>equals</operator>
+                <value>{!$Record.Id}</value>
+            </filters>
+        </actionCall>
+    </actionCalls>
+</Flow>
